@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    network_mode: "host"
+    container_name: n8n-container # A descriptive name for your container
+    restart: unless-stopped # Automatically restart the container unless explicitly stopped
+
+    ports:
+      # Format: <Host Port>:<Container Port>
+      # This maps port 5678 on your NAS to port 5678 inside the container.
+      - "5678:5678"
+
+    volumes:
+      # Format: <NAS Data Directory>:<Container Data Directory>
+      # This persists N8N's data to a location on your NAS.
+      # IMPORTANT:
+      # 1. REPLACE `/path/to/your/n8n/data` with the actual path on your NAS
+      #    where you want N8N to store its data (e.g., `/volume1/docker/n8n`).
+      # 2. Ensure the Docker user on your NAS has write permissions to this directory.
+      - /volume1/docker/n8n:/home/node/.n8n
+      - /volume1/docker/n8n_files:/home/app/n8n_files
+
+      # --- OR (Alternative using a named volume) ---
+      # If you prefer Docker manage the volume location, comment out the bind mount above
+      # and uncomment the line below. Docker will create a named volume called 'n8n_data'.
+      # - n8n_data:/home/node/.n8n
+      # -------------------------------------------------
+
+    environment:
+      # - N8N_RUNNERS_ENABLED=true
+      - N8N_SECURE_COOKIE=false
+
+      # Set your Timezone, e.g. Europe/Berlin, America/New_York, Asia/Singapore.
+      # See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      - GENERIC_TIMEZONE=Europe/Berlin # <-- Change this!
+
+      # This setting tells n8n the URL where it is reachable from the outside.
+      # This is important for webhooks and external connections.
+      # REPLACE <YOUR_NAS_IP_OR_HOSTNAME> with the actual IP address or hostname
+      # of your NAS on your local network.
+      - WEBHOOK_URL=http://10.74.178.99:5678/ # <-- Change this!
+      # - N8N_PROTOCOL=http # Often inferred from WEBHOOK_URL, but can be explicit
+      # - N8N_HOST=<YOUR_NAS_IP_OR_HOSTNAME> # <-- Optionally set this too
+
+      # --- Basic Authentication (Highly Recommended!) ---
+      # Protect your N8N instance even on a local network.
+      # Set N8N_BASIC_AUTH_ACTIVE=true to enable.
+      - N8N_BASIC_AUTH_ACTIVE=true # <-- Set to true to enable authentication
+
+      # Set your desired username and password for basic authentication.
+      # IMPORTANT: CHANGE THESE TO STRONG, UNIQUE VALUES!
+      - N8N_BASIC_AUTH_USER=chrisham # <-- Change this!
+      - N8N_BASIC_AUTH_PASSWORD=qxrvtiU_7NEYtjC_5DJw # <-- CHANGE THIS!
+
+      # --- Encryption Key (CRITICAL!) ---
+      # N8N uses this key to encrypt credentials and other sensitive data stored in the database.
+      # This is extremely important for security.
+      # IMPORTANT: GENERATE A STRONG, RANDOM KEY AND STORE IT SECURELY!
+      # Example: Use a tool like `openssl rand -base64 32` to generate a key.
+      # - N8N_ENCRYPTION_KEY=XcEIxtL9YwsSBxvD4J74 # <-- CHANGE THIS! DO NOT USE THIS EXAMPLE KEY!
+
+      # --- Optional: Other N8N Settings ---
+      # You can add other N8N environment variables here if needed.
+      # For example, to use PostgreSQL instead of default SQLite:
+      # - DB_TYPE=postgres
+      # - DB_POSTGRES_HOST=your_postgres_host
+      # - DB_POSTGRES_DATABASE=n8n
+      # - DB_POSTGRES_USER=n8n
+      # - DB_POSTGRES_PASSWORD=your_postgres_password
+      # (Requires a separate PostgreSQL container/service)
+
+# --- Named Volume (if using the alternative above) ---
+# volumes:
+#   n8n_data:
+#     external: false # Set to true if you pre-created the volume
