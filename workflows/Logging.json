@@ -1,0 +1,338 @@
+{
+  "name": "Logging",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": []
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1152,
+        96
+      ],
+      "id": "a9c4e2b6-b122-4775-93fa-ac93538301cb",
+      "name": "Pass Through Data"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "84ae85c4-dad1-4163-84a5-7c03cf858162",
+              "name": "logFilePath",
+              "value": "={{ $json.storagePath + '/email_processing_log_' + (() => {\n  const now = new Date();\n  const monday = new Date(now);\n  monday.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));\n  \n  // Format as YYYY-MM-DD in local timezone\n  const year = monday.getFullYear();\n  const month = String(monday.getMonth() + 1).padStart(2, '0');\n  const day = String(monday.getDate()).padStart(2, '0');\n  \n  return `${year}-${month}-${day}`;\n})() + '.csv' }}",
+              "type": "string"
+            },
+            {
+              "id": "week-info",
+              "name": "weekStart",
+              "value": "={{ moment($json.timestamp).startOf('week').format('YYYY-MM-DD') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -928,
+        96
+      ],
+      "id": "eba4f61d-8d0a-4f9e-8c33-7282002e7b39",
+      "name": "Define File Details"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.logFilePath }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        96
+      ],
+      "id": "3ab6069a-d48a-485d-a84c-8e7ea624de6d",
+      "name": "Check Log File Exists",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the data from previous nodes\nconst fileDetailsData = $('Define File Details').first().json;\nconst fileCheckData = $('Check Log File Exists').first();\n\n// Check if file exists and extract content\nlet existingContent = '';\nlet fileExists = false;\n\nif (fileCheckData.binary && fileCheckData.binary.data) {\n  fileExists = true;\n  // Extract the buffer data and convert to string\n  const buffer = fileCheckData.binary.data.data;\n  if (buffer) {\n    // Check if it's a base64 string or actual buffer\n    if (typeof buffer === 'string') {\n      // It's base64 encoded, decode it\n      existingContent = Buffer.from(buffer, 'base64').toString('utf8');\n    } else {\n      // It's already a buffer\n      existingContent = buffer.toString('utf8');\n    }\n  }\n}\n\nreturn [{\n  json: {\n    originalData: fileDetailsData,\n    fileExists: fileExists,\n    existingContent: existingContent\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "43f643bf-88a1-4ebb-847c-b8f351411880",
+      "name": "Combine Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "57e3722a-9cd9-41e9-8504-284541b58baf",
+              "leftValue": "={{ $json.fileExists }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        96
+      ],
+      "id": "12e8d5d4-8655-46f4-9e95-489b67288c0f",
+      "name": "File Exists Check"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "csv-row",
+              "name": "csvRow",
+              "value": "={{ '\"' + $json.originalData.timestamp + '\",\"' + $json.originalData.subject.replace(/\"/g, '\"\"') + '\",\"' + $json.originalData.attachmentNames.replace(/\"/g, '\"\"') + '\",\"' + $json.originalData.storagePath.replace(/\"/g, '\"\"') + '\",\"' + $json.originalData.message.replace(/\"/g, '\"\"') + '\",\"' + $json.originalData.status + '\"' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5a8f6047-5dff-4a5a-a72f-d22f7d6d4feb",
+      "name": "Create CSV Row"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the data\nconst originalData = $input.first().json.originalData;\nconst existingContent = $input.first().json.existingContent;\nconst csvRow = $input.first().json.csvRow;\n\nconsole.log('=== APPEND TO EXISTING LOG DEBUG ===');\nconsole.log('originalData.timestamp:', originalData.timestamp);\nconsole.log('csvRow:', csvRow);\nconsole.log('Appending to existing log:');\nconsole.log('Existing content length:', existingContent ? existingContent.length : 0);\nconsole.log('CSV row to append:', csvRow);\nconsole.log('File path:', originalData.logFilePath);\n\n// Create the full file content\nlet fullContent;\nif (existingContent && existingContent.trim() !== '') {\n  fullContent = existingContent + csvRow;\n} else {\n  // If no existing content, add header\n  fullContent = 'Timestamp,Subject,Attachment Names,Storage Path,Message,Status\\n' + csvRow;\n}\n\nconsole.log('Full content to write:', fullContent);\nconsole.log('=== END APPEND DEBUG ===');\n\n// Escape single quotes in content for shell\nconst escapedContent = fullContent.replace(/'/g, `'\"'\"'`);\nconst writeCommand = `echo '${escapedContent}' > '${originalData.logFilePath}'`;\n\nconsole.log('Write command created for existing file update');\n\n// Return only what we need for the command\nreturn [{\n  json: {\n    fileContent: fullContent,\n    filePath: originalData.logFilePath,\n    writeCommand: writeCommand\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "45823772-2650-4aef-865d-b1b9564644d7",
+      "name": "Append to Existing Log"
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.writeCommand }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "03de77fa-d947-4434-8474-99af35b053df",
+      "name": "Write Updated Log"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the input data correctly\nconst input = $input.first();\n\n// Debug the input structure first\nconsole.log('DEBUG - Full input structure:', JSON.stringify(input, null, 2));\n\n// Extract data from either the direct path or the originalData structure\nlet timestamp, subject, attachmentNames, storagePath, message, status, logFilePath;\n\n\n  timestamp = input.json.originalData.timestamp;\n  subject = input.json.originalData.subject;\n  attachmentNames = input.json.originalData.attachmentNames;\n  storagePath = input.json.originalData.storagePath;\n  message = input.json.originalData.message;\n  status = input.json.originalData.status;\n  logFilePath = input.json.originalData.logFilePath;\n\n// Apply fallbacks if still not found\n\nif (!timestamp) {\n  timestamp = new Date().toISOString();\n  console.log('WARNING: Using fallback timestamp - check parent workflow');\n} else {\n  console.log('SUCCESS: Using timestamp from parent workflow:', timestamp);\n}\n\nsubject = subject || 'N/A';\nattachmentNames = attachmentNames || 'No attachments';\nstoragePath = storagePath || 'N/A';\nmessage = message || 'N/A';\nstatus = status || 'UNKNOWN';\n\nif (!logFilePath) {\n  throw new Error('Cannot determine log file path - missing logFilePath');\n}\n\n// Create CSV content\nconst csvContent = `Timestamp,Subject,Attachment Names,Storage Path,Message,Status\\n\"${timestamp}\",\"${subject.replace(/\"/g, '\"\"')}\",\"${attachmentNames.replace(/\"/g, '\"\"')}\",\"${storagePath.replace(/\"/g, '\"\"')}\",\"${message.replace(/\"/g, '\"\"')}\",\"${status}\"`;\n\nconst escapedContent = csvContent.replace(/'/g, `'\"'\"'`);\nconst writeCommand = `echo '${escapedContent}' > '${logFilePath}'`;\n\nreturn [{\n  json: {\n    csvContent: csvContent,\n    filePath: logFilePath,\n    writeCommand: writeCommand,\n    debug: {\n      inputStructure: Object.keys(input),\n      usedTimestamp: timestamp,\n      dataSource: input.json.originalData ? 'originalData' : 'direct'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        208
+      ],
+      "id": "36aa9829-f992-4fad-8342-cd803698ab5c",
+      "name": "Create New Log with Header"
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.writeCommand }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        320,
+        208
+      ],
+      "id": "18d61cdb-a5ee-43d4-884a-726dd21c6301",
+      "name": "Write New Log File"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1424,
+        96
+      ],
+      "id": "73b4fa16-30a9-4713-91d7-f4934e3c3245",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "content": "## Logging node\nIn this node a weekly csv file is written logging all tasks the automation did during the week\n",
+        "height": 544,
+        "width": 2448
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1552,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "e2656db3-5bc8-4fd2-be97-f1cc6c3051c6",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Pass Through Data": {
+      "main": [
+        [
+          {
+            "node": "Define File Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define File Details": {
+      "main": [
+        [
+          {
+            "node": "Check Log File Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Log File Exists": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Data": {
+      "main": [
+        [
+          {
+            "node": "File Exists Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Exists Check": {
+      "main": [
+        [
+          {
+            "node": "Create CSV Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Log with Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create CSV Row": {
+      "main": [
+        [
+          {
+            "node": "Append to Existing Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Existing Log": {
+      "main": [
+        [
+          {
+            "node": "Write Updated Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Log with Header": {
+      "main": [
+        [
+          {
+            "node": "Write New Log File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Pass Through Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1be47bde-dfd6-4092-bbb2-d9b4811ac215",
+  "meta": {
+    "instanceId": "e15cf8908e9b63ed0b0522b7afbad1edd09b25b3422807b598a78f2aa60873d6"
+  },
+  "id": "8noij86o05zKEVkd",
+  "tags": []
+}
