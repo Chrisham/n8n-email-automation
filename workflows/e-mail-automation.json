@@ -1,0 +1,322 @@
+{
+  "name": "e-mail-automation",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.subject }}",
+              "operation": "contains",
+              "value2": "Subject-1"
+            },
+            {
+              "value1": "={{ $json.subject }}",
+              "operation": "contains",
+              "value2": "Subject-2"
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "id": "a150342c-0829-4948-9591-ffbc6249d54f",
+      "name": "Filter Subject",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1184,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nconst item = $input.item;\n\nconsole.log('Incoming item:', item);\n\nif (item.binary && typeof item.binary === 'object') {\n  for (const key of Object.keys(item.binary)) {\n    const binaryData = item.binary[key];\n    console.log(`Found binary key: ${key}`, binaryData);\n\n    if (binaryData && typeof binaryData === 'object') {\n      results.push({\n        json: {\n          originalKey: key,\n          fileName: binaryData.fileName || 'unknown',\n          hasAttachment: true,\n          ...item.json\n        },\n        binary: {\n          data: binaryData,\n        }\n      });\n    }\n  }\n} else {\n  console.log('No binary data found on this item.');\n}\n\nif (results.length === 0) {\n  return [{\n    json: {\n      hasAttachment: false,\n      fileName: null,\n      originalKey: null,\n      ...item.json\n    }\n  }];\n}\n\nreturn results;"
+      },
+      "id": "61885171-08a2-41b8-be78-d3b752733447",
+      "name": "Process Email Attachments",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -960,
+        144
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.hasAttachment }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a86bcc25-e939-416b-9222-3255723a7a8d",
+      "name": "Has Attachments",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -736,
+        144
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.fileName || '' }}",
+              "operation": "endsWith",
+              "value2": ".pdf"
+            }
+          ]
+        }
+      },
+      "id": "5e41b49b-3fa9-40d2-93a9-2890572cd29c",
+      "name": "Is PDF",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -512,
+        80
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fileName": "=/home/app/n8n_files/{{ $binary.data.fileName }}",
+        "options": {}
+      },
+      "name": "Save PDF to NAS",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        0
+      ],
+      "id": "d90fd40f-3ef6-43fd-a4d9-c4d491c8bd46"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2ff84ac6-bad4-4514-9163-a18a558df113",
+              "name": "timestamp",
+              "value": "={{ $now }}",
+              "type": "string"
+            },
+            {
+              "id": "ce29dd87-8637-4044-8e69-0c77906349ef",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "f17623b4-743b-44ab-b3e9-9990b320c303",
+              "name": "attachmentNames",
+              "value": "={{ $json.fileName || 'None' }}",
+              "type": "string"
+            },
+            {
+              "id": "91733cc5-4620-455a-a339-3e660f7b6452",
+              "name": "storagePath",
+              "value": "={{ '/home/app/n8n_files/' }}",
+              "type": "string"
+            },
+            {
+              "id": "9c2239d9-ccfa-4425-a582-9b88fe0d8578",
+              "name": "message",
+              "value": "={{ $json.hasAttachment && ($json.fileName && $json.fileName.endsWith('.pdf')) ? 'PDF attachment saved successfully' : 'Email processed - no PDF attachments' }}",
+              "type": "string"
+            },
+            {
+              "id": "action-type",
+              "name": "actionType",
+              "value": "={{ $json.hasAttachment && ($json.fileName && $json.fileName.endsWith('.pdf')) ? 'PDF_SAVED' : 'NO_PDF_FOUND' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -64,
+        144
+      ],
+      "id": "4c177884-53bc-43c7-83f0-837ffa97776b",
+      "name": "Prepare Logger Payload"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "8noij86o05zKEVkd",
+          "mode": "list",
+          "cachedResultName": "Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        160,
+        144
+      ],
+      "id": "25f6a38a-c4fd-448f-942a-908e3172d094",
+      "name": "Execute Workflow"
+    },
+    {
+      "parameters": {
+        "postProcessAction": "nothing",
+        "format": "resolved",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [
+        -1408,
+        144
+      ],
+      "id": "cdf79437-2365-4bac-9f36-034d59cdc339",
+      "name": "Email Trigger (IMAP)1",
+      "credentials": {
+        "imap": {
+          "id": "hQrJ4E5950ebDhQX",
+          "name": "IMAP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## E-Mail Processing\nIn this mail workflow the relevant E-Mails for processing are identified\nIn the node \"Filter Subject\" change the Values for Subject-1, Subject-2,...\n\n",
+        "height": 464,
+        "width": 1920,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1488,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "5cd15e3c-7f2f-46c2-9064-1019e32fa347",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Filter Subject": {
+      "main": [
+        [
+          {
+            "node": "Process Email Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Email Attachments": {
+      "main": [
+        [
+          {
+            "node": "Has Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Attachments": {
+      "main": [
+        [
+          {
+            "node": "Is PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Logger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is PDF": {
+      "main": [
+        [
+          {
+            "node": "Save PDF to NAS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Logger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save PDF to NAS": {
+      "main": [
+        [
+          {
+            "node": "Prepare Logger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Logger Payload": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Trigger (IMAP)1": {
+      "main": [
+        [
+          {
+            "node": "Filter Subject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "99f783ae-7352-45eb-8d65-9bec386b2307",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e15cf8908e9b63ed0b0522b7afbad1edd09b25b3422807b598a78f2aa60873d6"
+  },
+  "id": "yuMlmm6fYN05yVfX",
+  "tags": []
+}
